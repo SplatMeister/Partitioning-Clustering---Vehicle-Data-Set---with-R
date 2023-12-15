@@ -1,0 +1,429 @@
+---
+output:
+  pdf_document: default
+  html_document: default
+---
+
+
+```{r}
+library(readxl)
+library(dplyr)
+library(ggplot2)
+library(ggfortify)
+library(factoextra)
+library(cluster)
+library(GGally)
+library(plotly)
+library(reshape2)
+library(NbClust)
+library(mclust)
+library(corrplot)
+library(clValid)
+library(rmarkdown)
+
+```
+
+```{r}
+vehicle <- read_excel("D:/Data Science/Data Mining/Assignment/Question 2/vehicle.xlsx", sheet = 1)
+vehicle 
+summary(vehicle)
+head(vehicle)
+dim(vehicle)
+```
+```{r}
+
+"Checking table attribuuted & count of class type based on the data"
+
+#Vehicle Labels
+
+names(vehicle)
+
+#Table of each Class
+vehicle.labels = vehicle$Class
+table(vehicle.labels)
+count <- ncol(vehicle)
+count
+
+"Removeing Samples Column"
+vehicle <- vehicle[, -c(1)]
+head(vehicle)
+```
+```{r}
+"Data Pre Processing"
+
+
+# Check for missing values
+any(is.na(vehicle))
+
+
+# Remove the column (class) for and keep all numeric
+vehicle_columns_removed <- vehicle[, -c(19)]
+dim(vehicle_columns_removed)
+head(vehicle_columns_removed)
+```
+```{r}
+"Clustering the Data set for the four clusters (Prior to pre processing)"
+
+# Run k-means clustering with 4 clusters
+k_clusters <- kmeans(vehicle_columns_removed, centers = 4)
+
+# Visualize the clustering using fviz_cluster
+fviz_cluster(k_clusters, data = vehicle_columns_removed)
+
+```
+
+```{r}
+"Removing outliers using Z Score Method"
+
+# Calculate z-scores for each attribute
+vehicle_z_scores <- apply(vehicle_columns_removed, 2, function(x) (x - mean(x)) / sd(x))
+
+# Set a threshold for z-scores
+threshold <- 3
+
+# Identify outliers
+outliers <- which(abs(vehicle_z_scores) > threshold, arr.ind = TRUE)
+
+# Remove outliers from both the original dataset and the selected columns
+vehicle_data_cleaned <- vehicle[-outliers[, 1], ]
+vehicle_columns_removed_cleaned <- vehicle_columns_removed[-outliers[, 1], ]
+
+# Subset the original dataset to include only the rows that are not outliers
+vehicle_cleaned <- vehicle[-outliers[, 1], ]
+
+# Add the Class column back to the dataset
+vehicle_data_cleaned <- cbind(vehicle_cleaned[, 1], vehicle_columns_removed_cleaned, vehicle_cleaned[, 19])
+
+head(vehicle_columns_removed)
+dim(vehicle_columns_removed)
+head(vehicle_data_cleaned)
+dim(vehicle_data_cleaned)
+```
+
+```{r}
+"Scale the Data"
+
+# Standardize the data
+scaled_vehicle_nc <- scale(vehicle_columns_removed)
+head(scaled_vehicle_nc)
+summary(scaled_vehicle_nc)
+
+
+# Combine the first 18 columns of scaled_vehicle_nc with the last column of vehicle_data_cleaned
+scaled_vehicle_data <- cbind(scaled_vehicle_nc, vehicle_data_cleaned[,ncol(vehicle_data_cleaned)])
+head(scaled_vehicle_data)
+
+#Naming the column "class"
+colnames(scaled_vehicle_data)[19] <- "Class"
+
+dim(scaled_vehicle_data)   # without class attribute
+dim(scaled_vehicle_nc)     # with class attribute
+
+```
+```{r}
+"calculate the Euclidean distance"
+
+# Calculate the distance matrix
+distance_matrix <- dist(scaled_vehicle_nc)
+
+# View the first 10 distances
+head(distance_matrix, n = 10)
+```
+```{r}
+"Clustering the Data set for the four clusters (Using the pre processed Data)"
+
+# Perform k-means clustering with 4 clusters
+set.seed(123) # For reproducibility
+k <- kmeans(scaled_vehicle_nc, centers = 4)
+
+# Add the 'Class' column to the clustering results
+cluster_results <- data.frame(Class = scaled_vehicle_data[, 19], Cluster = k$cluster)
+
+# Print the number of observations in each cluster
+table(cluster_results$Cluster)
+
+# Visualize the clusters using fviz_cluster
+fviz_cluster(k, data = scaled_vehicle_nc, stand = FALSE,
+             geom = "point", pointsize = 2, 
+             palette = "jco",
+             ggtheme = theme_minimal()) +
+  ggtitle("K-means clustering (k = 4)")
+
+```
+```{r}
+"Calculate How many clusters are required"
+
+# Elbow Method
+fviz_nbclust(scaled_vehicle_nc, kmeans, method = "wss")+labs(subtitle = "Elbow Method")
+
+# Silhouette Method
+fviz_nbclust(scaled_vehicle_nc, kmeans, method = "silhouette")+labs(subtitle = "Silhouette Method")
+
+```
+```{r}
+# K-means clustering with 2 clusters
+set.seed(123)
+k2 <- kmeans(scaled_vehicle_nc, 2)
+
+# Visualize the clusters using fviz_cluster
+fviz_cluster(k2, data = scaled_vehicle_nc, stand = FALSE,
+             geom = "point", pointsize = 2, 
+             palette = "jco",
+             ggtheme = theme_minimal()) +
+  ggtitle("K-means clustering (k = 2)")
+
+# K-means clustering with 3 clusters
+set.seed(123)
+k3 <- kmeans(scaled_vehicle_nc, 3)
+
+# Visualize the clusters using fviz_cluster
+fviz_cluster(k3, data = scaled_vehicle_nc, stand = FALSE,
+             geom = "point", pointsize = 2, 
+             palette = "jco",
+             ggtheme = theme_minimal()) +
+  ggtitle("K-means clustering (k = 3)")
+
+# K-means clustering with 4 clusters
+set.seed(123)
+k4 <- kmeans(scaled_vehicle_nc, 4)
+
+# Visualize the clusters using fviz_cluster
+fviz_cluster(k4, data = scaled_vehicle_nc, stand = FALSE,
+             geom = "point", pointsize = 2, 
+             palette = "jco",
+             ggtheme = theme_minimal()) +
+  ggtitle("K-means clustering (k = 4)")
+
+```
+```{r}
+"Silhouette Score for two Clusters"
+
+# Calculate the silhouette score for 2 clusters
+k_means_2 <- kmeans(scaled_vehicle_nc, centers = 2, nstart = 100)
+silhouette_2 <- silhouette(k_means_2$cluster, dist(scaled_vehicle_nc))
+mean_silhouette_2 <- mean(silhouette_2[,2])
+cat("Average silhouette score for 2 clusters:", mean_silhouette_2, "\n")
+
+# Calculate the silhouette score for 3 clusters
+k_means_3 <- kmeans(scaled_vehicle_nc, centers = 3, nstart = 100)
+silhouette_3 <- silhouette(k_means_3$cluster, dist(scaled_vehicle_nc))
+mean_silhouette_3 <- mean(silhouette_3[,3])
+cat("Average silhouette score for 3 clusters:", mean_silhouette_3, "\n")
+
+# Calculate the silhouette score for 4 clusters
+k_means_4 <- kmeans(scaled_vehicle_nc, centers = 4, nstart = 100)
+silhouette_4 <- silhouette(k_means_4$cluster, dist(scaled_vehicle_nc))
+mean_silhouette_4 <- mean(silhouette_4[,3])
+cat("Average silhouette score for 4 clusters:", mean_silhouette_3, "\n")
+```
+```{r}
+"WSS Score for Clusters"
+
+#K-means clustering with 2 clusters
+set.seed(123)
+km2 <- kmeans(scaled_vehicle_nc, 2)
+
+
+#WSS score for 2 clusters
+wss2 <- sum(km2$withinss)
+cat("WSS score for 2 clusters:", wss2, "\n")
+
+#K-means clustering with 3 clusters
+set.seed(123)
+km3 <- kmeans(scaled_vehicle_nc, 3)
+
+
+#WSS score for 3 clusters
+wss3 <- sum(km3$withinss)
+cat("WSS score for 3 clusters:", wss3, "\n")
+
+
+#K-means clustering with 4 clusters
+set.seed(123)
+km4 <- kmeans(scaled_vehicle_nc, 4)
+
+
+#WSS score for 4 clusters
+wss4 <- sum(km4$withinss)
+cat("WSS score for 4 clusters:", wss3, "\n")
+```
+
+```{r}
+"Mean of each attribute (Cluster 2)"
+
+# Calculate centroids
+centroids <- k2$centers
+centroids
+```
+
+```{r}
+"Visualizing the Mean for Each attribute of each group"
+
+# k-means clustering with k=3
+set.seed(123)
+kmeans_result <- kmeans(scaled_vehicle_nc, centers=2, nstart=100)
+
+# mean of each attribute of each group
+cluster_means <- aggregate(scaled_vehicle_nc, by=list(kmeans_result$cluster), mean)
+cluster_means
+
+# Reshape the data into long format
+cluster_means_long <- reshape2::melt(cluster_means, id.vars = "Group.1")
+
+# Create the heatmap
+ggplot(cluster_means_long, aes(x=variable, y=Group.1, fill=value)) +
+  geom_tile() +
+  scale_fill_gradient(low="white", high="red") +
+  labs(x="Attribute", y="Cluster", fill="Mean Value") +
+  theme_minimal()
+```
+
+
+```{r}
+"NbClust to determine the winning cluster count"
+
+set.seed(123)
+clusterNo=NbClust(scaled_vehicle_nc,distance="euclidean", min.nc=2,max.nc=10,method="kmeans",index="all")
+```
+```{r}
+"Cluster Analysis of Vehicle Compactness and Circularity"
+
+# Visualization with 2 Clusters
+ggplot(scaled_vehicle_data, aes(x = Comp, y = Circ, color = factor(k2$cluster), shape = Class)) + 
+  geom_point(size = 3) +
+  labs(title = "Clustering Results Two Clusters", x = "Compactness", y = "Circularity", color = "Cluster", shape = "Class")
+
+# Visualization with 3 Clusters
+ggplot(scaled_vehicle_data, aes(x = Comp, y = Circ, color = factor(k3$cluster), shape = Class)) + 
+  geom_point(size = 3) +
+  labs(title = "Clustering Results Three Clusters", x = "Compactness", y = "Circularity", color = "Cluster", shape = "Class")
+
+# Visualization with 4 Clusters
+ggplot(scaled_vehicle_data, aes(x = Comp, y = Circ, color = factor(k4$cluster), shape = Class)) + 
+  geom_point(size = 3) +
+  labs(title = "Clustering Results Four Clusters", x = "Compactness", y = "Circularity", color = "Cluster", shape = "Class")
+```
+```{r}
+"Cluster Purity on K2 clusters to determine the results"
+# perform k-means clustering with k = 2
+set.seed(123)  # for reproducibility
+kmeans_result <- kmeans(scaled_vehicle_data[,1:18], centers = 2)
+
+# calculate cluster purity
+true_labels <- scaled_vehicle_data[,"Class"]
+predicted_labels <- kmeans_result$cluster
+cont_table <- table(true_labels, predicted_labels)
+purity_score <- sum(apply(cont_table, 1, max)) / sum(cont_table)
+
+# print the purity score
+cat("Cluster purity score:", round(purity_score, 2), "\n")
+
+```
+
+```{r}
+"Checking Corelation on the Data Set"
+
+# Calculate the correlation matrix
+corr <- cor(scaled_vehicle_nc)
+
+# Visualize the correlation matrix on a heatmap
+corrplot(corr, method = "number", type = "upper", order = "hclust", tl.col = "black")
+```
+```{r}
+"Perform Principal Component Analysis"
+
+# Perform PCA on the standardized data
+pca <- prcomp(scaled_vehicle_nc)
+
+# Calculate the proportion of variance explained by each principal component
+prop_var <- pca$sdev^2/sum(pca$sdev^2)
+
+# Create a data frame with the proportion of variance explained and the column names
+var_df <- data.frame(prop_var, names(vehicle)[1:18])
+
+# Sort the data frame in descending order of prop_var
+var_df <- var_df[order(-var_df$prop_var), ]
+
+# Create a scree plot with the column names arranged in descending order of prop_var
+ggplot(var_df, aes(x = reorder(names(vehicle)[1:18], -prop_var), y = prop_var)) +
+  geom_bar(stat = "identity", fill = "#00AFBB") +
+  geom_line(aes(group = 1)) +
+  scale_y_continuous(limits = c(0, 1), expand = c(0, 0)) +
+  labs(x = "Column Names", y = "Proportion of Variance Explained", title = "Scree Plot") +
+  theme_minimal()
+```
+```{r}
+"Selecting the top attributes based on PCA"
+
+# Calculate the proportion of variance explained by each principal component
+prop_var <- pca$sdev^2/sum(pca$sdev^2)
+
+# Create a data frame with the proportion of variance explained and the column names
+var_df <- data.frame(Attribute = names(vehicle)[1:18], Proportion_of_Variance_Explained = prop_var)
+
+# Order the data frame by the proportion of variance explained in descending order
+var_df <- var_df[order(var_df$Proportion_of_Variance_Explained, decreasing = TRUE),]
+
+# Select the top 5 attributes with the highest proportion of variance explained
+top_attributes <- var_df$Attribute[1:5]
+
+# Create a new data frame with only the top attributes
+vehicle_top_attributes <- vehicle[, top_attributes]
+
+# Display the new data frame
+head(vehicle_top_attributes)
+
+# Scale the data frame
+
+scale_vehicle_top_attributes <- scale(vehicle_top_attributes)
+head(scale_vehicle_top_attributes)
+```
+```{r}
+
+"Calculate How many clusters are required (Based on scale_vehicle_top_attributes) "
+
+# Elbow Method
+fviz_nbclust(scale_vehicle_top_attributes, kmeans, method = "wss")+labs(subtitle = "Elbow Method")
+
+# Silhouette Method
+fviz_nbclust(scale_vehicle_top_attributes, kmeans, method = "silhouette")+labs(subtitle = "Silhouette Method")
+```
+```{r}
+"NbClust to determine the winning cluster count"
+
+set.seed(26)
+clusterNo=NbClust(scale_vehicle_top_attributes,distance="euclidean", min.nc=2,max.nc=10,method="kmeans",index="all")
+
+```
+```{r}
+"Clustering scale_vehicle_top_attributes into two clusters"
+
+# Perform k-means clustering with k=2 on the scaled data
+kmeans_result_top <- kmeans(scale_vehicle_top_attributes, centers=2, nstart=100)
+
+
+ggplot(scale_vehicle_top_attributes, aes(x = Comp, y = Circ, color = factor(kmeans_result_top$cluster))) + 
+  geom_point(size = 3) +
+  labs(title = "Clustering Results (Two Clusters)", x = "Compactness", y = "Circularity", color = "Cluster")
+
+```
+```{r}
+"Calculating Adjusted Rand Index agains scaled_vehicle_nc vs scale_vehicle_top_attributes"
+
+# k-means clustering on scaled_vehicle_nc k = 2
+set.seed(123)
+kmeans_nc <- kmeans(scaled_vehicle_nc, centers = 2, nstart = 25)
+kmeans_nc$cluster <- as.factor(kmeans_nc$cluster)
+
+#  k-means clustering on scale_vehicle_top_attributes k = 4
+kmeans_top <- kmeans(scale_vehicle_top_attributes, centers = 2, nstart = 25)
+kmeans_top$cluster <- as.factor(kmeans_top$cluster)
+
+# ARI between the two clustering results
+ari <- adjustedRandIndex(kmeans_nc$cluster, kmeans_top$cluster)
+ari
+```
+
+
+
+
